@@ -1,0 +1,306 @@
+import pygame, sys
+import math
+import time
+
+pygame.init()
+
+win = pygame.display.set_mode((1300, 700))
+
+test_mode = True
+
+# for working with numbers -------------------------------------------------------------------------#
+def iterate(num):
+    print("Use 'range(number)'")
+
+
+def get_hundreds(num):
+    num = round(num)
+#    print(f"1: {str(num)}")
+    num = str(num)
+    if int(num) < 100:
+        num = "000"
+#    print(f"2: {num}")
+    num_list = list(num)
+#    print(f"3: {num_list}")
+    num_list.pop(-1)
+    num_list.pop(-1)
+#    print(f"4: {num_list}")
+    stringobingo = "".join(num_list)
+#    print(f"5: {stringobingo}")
+    intybinty = int(stringobingo)
+#    print(f"7: {str(intybinty)}")
+    return intybinty
+test_int = 123
+print("test int: " + str(test_int))
+print("hundreds of test int: " + str(get_hundreds(test_int)))
+
+# setting up the object class ----------------------------------------------------------------------#
+constant = 100
+
+
+class object():
+    def __init__(self, x, y, spot1, spot2, *colour):
+        self.x = x
+        self.y = y
+        self.width = constant
+        self.height = constant
+        self.spot = [spot1, spot2]
+        if bool(colour):
+            self.colour = colour
+        else:
+            self.colour = (0, 0, 255)
+
+    def draw(self, spot):
+        self.x = constant * spot[0]
+        self.y = constant * spot[1]
+        pygame.draw.rect(win, self.colour, (self.x, self.y, self.width, self.height))
+
+
+#        print(f"{str(colour)}, {str(x)}, {str(y)}, {str(width)}, {str(height)}")
+
+
+obj1 = object(200, 200, 2, 3, (0, 0, 255))
+objects = []
+objects.append(obj1)
+
+# setting up the default map -----------------------------------------------------------------------#
+onee = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+twoo = [0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0]
+tree = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+four = [0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0]
+five = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+sixe = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+sevi = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+level = [onee, twoo, tree, four, five, sixe, sevi]
+
+
+def draw_squares():
+    spot = [0, 0]
+    for row in level:
+        spot[0] += 1
+        spot[1] = -1
+        for place in row:
+            spot[1] += 1
+            if place == 1:
+                pygame.draw.rect(win, (255, 255, 255), (((spot[1] * constant)), ((spot[0] * constant) - 100), constant, constant))
+
+
+# for collision checks -----------------------------------------------------------------------------#
+# def check_pixel(posxy):
+#    for square in walls.wallspace:
+#        for value in square:
+#            valx = value[0]
+#            valy = value[1]
+#            posx = valx * constant
+#            posy = valy * constant
+#            checkx = posxy[0]
+#            checky = posxy[1]
+#            if checkx > posx and checkx < posx + constant:
+#                pass
+
+
+# setting up the walls -----------------------------------------------------------------------------#
+
+
+class walls():
+    wallspace = []
+
+
+def set_walls():
+    spot = [0, 0]
+    for row in level:
+        spot[0] += 1
+        spot[1] = -1
+        for place in row:
+            spot[1] += 1
+            if place == 1:  # x                            y
+                walls.wallspace.append([(spot[1]), ((spot[0]) - 1), place])
+    print(f"{str(walls.wallspace)}")
+
+
+# setting up the player ----------------------------------------------------------------------------#
+class player():
+    img = pygame.image.load("D:/python/3D attempt 1/player.png")
+    speed = 5
+    x = 250
+    y = 250
+    width = 126
+    height = 62
+    direction = 0
+    hitbox_placex = x
+    hitbox_placey = y
+    hitbox_width = 63
+    hitbox_height = 31
+    test_square = (win, (0, 255, 0), (x, y, constant, constant))
+
+
+    def draw(self):
+        img_copy = pygame.transform.rotate(player.img, ((0 - player.direction)))
+        win.blit(img_copy, (player.x - int(img_copy.get_width() / 2), (player.y - int(img_copy.get_height() / 2))))
+
+    # below is for player movement----------------------------------------
+    def move_forward(self):
+        my = math.sin(math.radians(self.direction)) * 10
+        mx = math.cos(math.radians(self.direction)) * 10
+        posy = player.y + my
+        posx = player.x + mx
+        self.canmove_forward = True
+        self.canmove_forwardy = True
+        self.canmove_forwardx = True
+
+        self.check_pixel(self, [posx, posy])
+
+        if self.canmove_forward:
+            self.x += mx
+            self.y += my
+
+    def move_backward(self):
+        self.y -= math.sin(math.radians(self.direction)) * 10
+        self.x -= math.cos(math.radians(self.direction)) * 10
+
+    def move_right(self):
+        self.direction += 90
+        self.move_forward(self)
+        self.direction -= 90
+
+    def move_left(self):
+        self.direction -= 90
+        self.move_forward(self)
+        self.direction += 90
+
+    # collision checks --------------------------------------------
+    def check_pixel(self, posxy):
+        check_x = posxy[0] // 100
+        check_y = posxy[1] // 100
+        self.test_square = (win, (0, 255, 0), (check_x * constant, check_y * constant, 100, 100))
+        for square in walls.wallspace:
+            current_squarex = square[0]
+            current_squarey = square[1]
+            is_in_x = bool(check_x == current_squarex)#(check_x - 15 < current_squarex + constant and check_x + 15 > current_squarex)
+#            print(f"{check_x} == {current_squarex}, {check_y} == {current_squarey}")
+            is_in_y = bool(check_y == current_squarey)#(check_y + 15 > current_squarey and check_y - 15 < current_squarey + constant)
+            is_in_square = bool(is_in_y and is_in_x)
+            if is_in_square:
+                self.canmove_forward = False
+#                print(f"square({str(current_squarex)} and {str(check_x)}), ({str(current_squarey)})")
+            if is_in_y:
+                self.canmove_forwardy = True
+#                print(f"y({str(current_squarey)},), ({str(current_squarex)})")
+            if is_in_x:
+                self.canmove_forwardx = True
+#                print(f"x{str(current_squarey)}, {str(current_squarex)}")
+
+
+player.img.set_colorkey((255, 255, 255))
+
+obj1 = object(200, 200, 100, 100, 2, 3, (0, 0, 255))
+objects = []
+objects.append(obj1)
+
+
+#time for the steak and mashed potaTOES of the program, the raycasts! (this is my first raycast program)
+
+
+class raycaster():
+    canmove_forward = True
+    resolution = 8
+
+# collision checks -----------------------------------------------------
+    def check_pixel(self, posxy):
+        check_x = posxy[0] // 100
+        check_y = posxy[1] // 100
+        for square in walls.wallspace:
+            current_squarex = square[0]
+            current_squarey = square[1]
+            is_in_x = bool(check_x == current_squarex)
+            is_in_y = bool(check_y == current_squarey)
+            is_in_square = bool(is_in_y and is_in_x)
+            if is_in_square:
+                self.canmove_forward = False
+#                print(f"square({str(current_squarex)} == {str(check_x)}), ({str(current_squarey)} == {str(check_y)})")
+                break
+            #print(f"square({str(current_squarex)} < {str(check_x)}), ({str(current_squarey)} > {str(check_y)})")
+
+
+    def single_ray(self):
+        start_time = time.time()
+        self.canmove_forward = True
+        x = player.x
+        y = player.y
+        direction = player.direction
+        max_distance = 100
+        distance = 0
+        while self.canmove_forward and bool(max_distance):
+            mx = math.cos(math.radians(direction)) * 6
+            my = math.sin(math.radians(direction)) * 6
+            self.check_pixel(self, [mx + x, my + y])
+            x += mx
+            y += my
+            pygame.draw.rect(win, (255, 0, 0), (x, y, 1, 1))
+            pygame.display.update()
+            max_distance -= 1
+            distance += 1
+
+
+    def draw_line(self):
+        pass
+
+
+# misc essential functions -------------------------------------------------------------------------#
+def redrawgamewindow():
+    if test_mode:
+        plx = (round(float(get_hundreds(player.x)))) * constant
+        ply = (round(float(get_hundreds(player.y)))) * constant
+        win.fill((0, 0, 0))
+        draw_squares()
+        pygame.draw.rect(win, (0, 255, 0), (plx, ply, constant, constant))
+        player.draw(player)
+    pygame.display.update()
+
+
+# mainloop -----------------------------------------------------------------------------------------#
+set_walls()
+run = True
+draw_squares()
+turnee = 5
+while run:
+    time.sleep(0.05)
+
+    redrawgamewindow()
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            run = False
+
+    keys = pygame.key.get_pressed()
+#input ------------------------------------------------------------------------------------------#
+    if keys[pygame.K_ESCAPE]:
+        run = False
+#movement -------------------------------------------
+    if keys[pygame.K_w]:
+        player.move_forward(player)
+    if keys[pygame.K_a]:
+        player.move_left(player)
+    if keys[pygame.K_s]:
+        player.move_backward(player)
+    if keys[pygame.K_d]:
+        player.move_right(player)
+    if keys[pygame.K_LEFT]:
+        player.direction -= turnee
+    if keys[pygame.K_RIGHT]:
+        player.direction += turnee
+    if keys[pygame.K_UP]:
+        turnee += 0.1
+    if keys[pygame.K_DOWN]:
+        turnee -= 0.1
+#test_mode toggle --------------------------------------------#
+    if keys[pygame.K_SPACE]:
+        if test_mode:
+            test_mode = False
+        else: test_mode = True
+    if keys[pygame.K_q]:
+        raycaster.single_ray(raycaster)
+
+
+pygame.quit()
+sys.exit()

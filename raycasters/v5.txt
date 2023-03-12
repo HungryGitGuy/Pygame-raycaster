@@ -1,0 +1,835 @@
+import fractions
+import time
+
+import pygame, math  # import modules
+
+pygame.init()  # required things for pygame
+
+window = pygame.display.set_mode((1300, 700))
+win = pygame.surface.Surface((1300, 700))
+winheight = window.get_height()
+winwidth = window.get_width()
+
+
+class dynamic_list(list):
+    def __add__(self, other):
+        try:
+            if other == list or dynamic_list:
+                return super(dynamic_list, self).__add__(other)
+        except TypeError:
+            if other == int or float:
+                for item in range(len(self)): # theres probably a better way to do this, but this is the only way I could figure out
+                    self[item] += other
+                return self
+        except:
+            print(f"Could not complete addition between {self} and {other}")
+
+    def __mu__(self, other):
+        try:
+            if other == int or float:
+                for item in range(len(self)):
+                    self[item] *= other
+                return self
+        except:
+            print(f"Could not complete multiplication between {self} and {other}")
+
+    def floatify(self, other):
+        for item in range(len(self)):
+            self[item] = float(self[item]) * other
+        return self
+
+
+# setting up the thing class ----------------------------------------------------------------------#
+constant = 20  # you can change this if you want, but to have it look right you'll have to change a value in the function
+# for drawing the squares
+
+class thing():
+    def __init__(self, x, y, spot1, spot2, *colour):
+        self.x = x
+        self.y = y
+        self.width = constant
+        self.height = constant
+        self.spot = [spot1, spot2]
+        if bool(colour):
+            self.colour = colour
+        else:
+            self.colour = (0, 0, 255)
+
+    def draw(self, spot):
+        self.x = constant * spot[0]
+        self.y = constant * spot[1]
+        pygame.draw.rect(win, self.colour, (self.x, self.y, self.width, self.height))
+
+
+# setting up the default map -----------------------------------------------------------------------#
+# no upper limit to the size of the map other than your pc, if you add a another list you need to add
+# it to the level list. 2 is wall, 1 is air.
+one  = [2, 3, 4, 5, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
+two  = [2, -1,1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2]
+three= [2, 1, 1, 3, 1, 1, 1, 2, 1, 2, 3, 1, 1, 1, 1, 2]
+four = [2, 1, 1, 4, 1, 1, 5, 2, 1, 2, 2, 1, 1, 1, 1, 2]
+five = [2, 1, 1, 5, 3, 3, 4, 1, 1, 1, 2, 1, 1, 2, 1, 2]
+six  = [2, 1, 1, 3, 1, 1, 2, 2, 2, 2, 4, 1, 2, 1, 1, 2]
+seven= [2, 1, 1, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2]
+eight= [2, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2]
+nine = [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
+# for example here could be ten  = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+level = [one, two, three, four, five, six, seven, eight, nine] # and here we would add "ten" to the list
+levelheight = len(level)
+levelwidth = len(level[0]) # It's len(level[0]) in case the user changes the name of the first row
+
+
+def draw_squares():
+    spot = [4, 0] # the place of 4 has to be changed if you change constant
+    for row in level:
+        spot[0] += 1
+        spot[1] = -1
+        for place in row:
+            spot[1] += 1
+            if place == 2:
+                pygame.draw.rect(win, (255, 255, 255), (((spot[1] * constant)), ((spot[0] * constant) - 100), constant, constant))
+            if place == 3:
+                pygame.draw.rect(win, (0, 255, 255), (((spot[1] * constant)), ((spot[0] * constant) - 100), constant, constant))
+            if place == 4:
+                pygame.draw.rect(win, (255, 50, 0), (((spot[1] * constant)), ((spot[0] * constant) - 100), constant, constant))
+            if place == 5:
+                pygame.draw.rect(win, (0, 255, 0), (((spot[1] * constant)), ((spot[0] * constant) - 100), constant, constant))
+
+
+# setting up the walls -----------------------------------------------------------------------------#
+
+# I'm just proud of this function
+class walls():
+    wallspace = []
+
+
+def set_walls():
+    spot = [0, 0]
+    for row in level:
+        spot[0] += 1
+        spot[1] = -1
+        for place in row:
+            spot[1] += 1
+            if place == 2: # x                            y
+                walls.wallspace.append(place)
+#                walls.wallspace.append([(spot[1]), ((spot[0]) - 1), place])
+#    print(f"{str(walls.wallspace)}")
+#    if a custom map won't work, uncommenting the above line could help with debugging
+
+
+# setting up the player ----------------------------------------------------------------------------#
+class player():
+    speed = 3
+    x = 250
+    y = 250
+    height = 0.1
+    width = 126
+#    height = 62
+    direction = 0
+    test_square = (win, (0, 255, 0), (x, y, constant, constant))
+    x_momentum = 1
+    y_momentum = 1
+    do_friction = True
+    invert_vertical = False
+    jumpcount = -0.2
+    jumping = False
+
+    def set_spawn(self):
+        y = 0
+        for row in level:
+            x = 0
+            y += 1
+            for square in row:
+                x += 1
+                if square == -1:
+                    player.x = x * 100 + 50
+                    player.y = y * 100 + 50
+
+
+    # below is for player movement----------------------------------------
+    def move_forward(self):
+        my = math.sin(math.radians(self.direction)) * self.speed
+        mx = math.cos(math.radians(self.direction)) * self.speed
+
+        posy = player.y + my
+        posx = player.x + mx
+        self.canmove_forward = True
+        self.canmove_forwardy = True
+        self.canmove_forwardx = True
+
+        self.canmove_forward = self.check_pixel(self, [posx, posy])
+        self.canmove_forwardx = self.check_pixel(self, [posx, self.y])
+        self.canmove_forwardy = self.check_pixel(self, [self.x, posy])
+
+        if self.canmove_forwardx:
+            self.x += mx
+        if self.canmove_forwardy:
+            self.y += my
+
+    def move_backward(self):
+        self.direction += 180
+        self.move_forward(self)
+        self.direction -= 180
+
+    def move_right(self):
+        self.direction += 90
+        self.move_forward(self)
+        self.direction -= 90
+
+    def move_left(self):
+        self.direction -= 90
+        self.move_forward(self)
+        self.direction += 90
+
+    # collision checks --------------------------------------------
+    def check_pixel(self, posxy):
+        check_x = int(posxy[0] // 100)
+        check_y = int(posxy[1] // 100)
+        row = level[check_y]
+        if row[check_x] >= 2:
+            return False
+        return True
+
+# player.img.set_colorkey((255, 255, 255))
+
+
+class Sprite:
+    sprites = []
+    def __init__(self, sprite="D:/python/3D game map editor/sprite test.png", posxy=(150, 150), hitbox=(20, 20), id=0):
+        self.ogsprite = pygame.image.load(sprite)
+        self.sprite = pygame.image.load(sprite)
+        self.x = posxy[0]
+        self.y = posxy[1]
+        self.draw_x = 0
+        self.draw_y = 225
+        self.hitbox = hitbox
+        self.scale = [30, 30]
+        self.drawn = False
+        self.sector = (self.x // 100 * 100, self.x // 100 * 100)
+        self.id = id
+
+    def activate(self):
+        Sprite.sprites.append(self)
+
+    def draw(self, scale=None, dist=1, purple=True, x=300, y=300):
+        self.draw_x = x
+        self.draw_y = y
+        self.draw_y += y // 2
+        if not bool(scale):
+            scale = self.scale
+        if purple:
+            self.sprite.set_colorkey((255, 0, 255))
+        height_of_line = (400 / dist) * 10 - raycaster.mid_screen
+        y = (raycaster.mid_screen - height_of_line) + 1000
+        y *= player.height
+        height_of_line -= y
+        height = height_of_line * (player.height * -1) // 10
+        y += raycaster.line_begin + height
+        self.sprite = pygame.transform.scale(self.ogsprite, (scale[0], height_of_line))
+        try:
+            win.blit(self.sprite, (self.draw_x, y + (height_of_line // 10) + height_of_line - self.sprite.get_height()))
+        except Exception as e:
+            print(e)
+        self.drawn = True
+
+
+    def identity_check(self):
+        return self
+
+    def update_position(self):
+        self.sector = (self.x // 100 * 100, self.x // 100 * 100)
+        self.drawn = False
+
+
+test_sprite = Sprite()
+test_sprite.activate()
+
+obj1 = thing(200, 200, 100, 100, 2, 3, (0, 0, 255))
+objects = [obj1]
+
+
+def get_angle_of_vector(vector, degrees=False):
+    if not degrees:
+        return math.atan2(vector[0], vector[1])
+    else: return math.degrees(math.atan2(vector[0], vector[1]))
+
+def y_within_x(x, y, wiggle_room=0):
+    """
+    to see if y is within x + wiggle_room and x - wiggle_room
+
+    :param float x: look above
+    :param float y: look above
+    :param float wiggle_room: must be positive
+    :return: bool, whether or not y is within x + wiggle_room and x - wiggle_room
+    """
+    if y > x - wiggle_room and y < x + wiggle_room:
+        return True
+    return False
+#time for the steak and mashed potaTOES of the program, the raycasts!
+
+class raycaster():
+    texture_mapper_version = 1 # this is just here for people who like looking into the older
+    # versions of this renderer. anything other than 1 has less features, but will (mostly) run faster.
+    canmove_forward = True
+    resolution = 20
+    FOV = 80
+    ray_jump = 10
+    minbright = 1
+    scan_lines = 69
+    mid_screen = -350
+    #ray_turn = 1
+    line_begin = 0
+    t = False
+    show_eray = True
+
+    default_texture_1  =[(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)]
+    default_texture_2  =[(255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (0, 0, 0)]
+    default_texture_3  =[(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (255, 255, 255), (255, 255, 255)]
+    default_texture_4  =[(0, 0, 0), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255)]
+    default_texture_5  =[(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (255, 255, 255), (255, 255, 255), (255, 255, 255)]
+    default_texture_6  =[(0, 0, 0), (0, 0, 0), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255)]
+    default_texture_7  =[(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255)]
+    default_texture_8  =[(0, 0, 0), (0, 0, 0), (0, 0, 0), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255)]
+    default_texture_9  =[(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255)]
+    default_texture_10 =[(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255), (255, 255, 255)]
+
+    texture_png = "test "
+    texture_png_list = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    for i in range(10):
+        texture_png_list[i] = pygame.image.load(texture_png + str(i) + ".png")
+        texture_png_list[i] = texture_png_list[i].convert()
+        window.blit(pygame.image.load(texture_png + str(i) + ".png"), (i * 130, 0))
+        pygame.display.update()
+        pygame.time.wait(100)
+
+#    DV = winwidth // math.tan(FOV // 2)
+
+# collision checks -----------------------------------------------------
+    def check_pixelTrue_or_False(self, posxy): # if is in square, returns false. else returns true
+        """
+        :param posxy: tuple that tells the function where to check.
+        :return: false if its a wall, true if its air.
+        """
+        check_x = int(posxy[0] // 100)
+        check_y = int(posxy[1] // 100)
+        row = level[check_y]
+        if row[check_x] > 1:
+            return False
+        else:
+            return True
+
+    def colour_check(self, posxy):  # returns the value of the square for texturing and colouring
+        """
+        :param tuple posxy: tuple that tells the function where to check.
+        :return: an int representing the value of the posxy in level list of lists
+        """
+        check_x = int(posxy[0] // 100)
+        check_y = int(posxy[1] // 100)
+        row = level[check_y]
+        return row[check_x]
+
+    def pos_to_texture(self, checkxy):
+        """
+        For use in implementing textures, returns the vertical line index to display at that spot.
+        For the purposes of this function, a square is organised so the top surface is surface 1, then rotated counter-clockwise.
+        :param list checkxy: the x and y to check
+        :return: list, index 0 is the index of the texture in the texture list, index 1 is the side its on
+        """
+        origin_x = (checkxy[0] // 100) * 100
+        origin_y = (checkxy[1] // 100) * 100
+
+        x_index = checkxy[0] - origin_x
+        y_index = checkxy[1] - origin_y
+
+        side_2 = False
+        side_1 = False
+        side_4 = False
+        side_3 = False   #              x
+        if y_within_x(y=origin_x, x=checkxy[0], wiggle_room=10):
+            side_2 = True
+            return y_index // 10 #       y
+        elif y_within_x(y=origin_y, x=checkxy[1], wiggle_room=20):
+            side_1 = True
+            return x_index // 10 #            x
+        elif y_within_x(y=origin_x + 100, x=checkxy[0], wiggle_room=10):
+            side_4 = True
+            return y_index // 10 #            y
+        elif y_within_x(y=origin_y + 100, x=checkxy[1], wiggle_room=20):
+            side_3 = True
+            return x_index // 10
+
+        ##print(f"value in function: {max(x_index // 10, y_index // 10)}") ------------------------PRINT STATEMENT
+        if side_1 or side_2:
+            return x_index // 10
+        elif side_3 or side_4:
+            return y_index // 10
+        else:
+            #            print(f"Function pos_to_texture malfunctioned. \nx: {checkxy[0]} y: {checkxy[1]} \n {origin_x},   {origin_y}")
+            return y_index // 10
+
+
+    def single_ray_walls(self, direction):  # since it's a separate ray for the entities there is a lot of
+                                            # optimisation to be done with the rays
+        """
+        A ray that only hits walls.
+        :param int direction: a direction it degrees to point the ray in.
+        :return: its distance and the wall it hit in that order.
+        """
+        canmove_forward = True
+        x = player.x
+        y = player.y
+        max_distance = 200
+        distance = 0
+        prev_x = x // 100
+        prev_y = y // 100
+        mx = math.cos(math.radians(direction)) * 6
+        my = math.sin(math.radians(direction)) * 6
+        while canmove_forward and bool(max_distance): #I tried using a for loop, but it actually decreased the framerate
+#            if x // 100 != prev_x or y // 100 != prev_y:  # this is code for optimising rays slightly, but introduces visual artifacts
+#                canmove_forward = self.check_pixelTrue_or_False(self, [mx + x, my + y])
+#                prev_x = x // 100
+#                prev_y = y // 100
+#                pygame.draw.rect(win, (0, 100, 255), (x+1, y+1, 1, 1))
+            canmove_forward = self.check_pixelTrue_or_False(self, [mx + x, my + y])
+            pygame.draw.rect(win, (0, 100, 255), (x+1, y+1, 1, 1))
+            x += mx
+            y += my
+            max_distance -= 1
+            distance += 1
+#        self.pos_to_texture(self=self, checkxy=[x, y])
+        #       (      )  (                            )  (                                                                   )
+        return (distance, self.colour_check(self, [x,y]), self.pos_to_texture(self=self, checkxy=[x, y]))
+
+
+    def single_ray_entities(self, direction): # seperate raycast for entities to make the distance sort easier
+        """
+        A ray that only detects entities. things like projectiles, the player, or hitscan weapons should incorporate this.
+        :param int direction: direction in degrees for the ray to go to
+        :return: the sprite object it hit
+        """
+        x = player.x
+        y = player.y
+        max_distance = 200
+        mx = math.cos(math.radians(direction)) * 6
+        my = math.sin(math.radians(direction)) * 6
+        for d in range(max_distance):
+            c = [255, 0, 0]
+            pygame.draw.rect(win, c, (x, y, 1, 1))
+            for s in Sprite.sprites:
+                if x > s.x and x < s.x + s.hitbox[0]:
+                    if y > s.y and y < s.y + s.hitbox[1]:
+                        return s, d
+            x += mx
+            y += my
+        #    canmove_forward = self.check_pixelTrue_or_False(self, [mx + x, my + y])
+        #    if not canmove_forward:
+        #        break
+        return test_sprite, 100000
+
+    # to make implementing mirrors easier. UNFINISHED AND BROKEN
+    def reflect_ray(self, direction_VECTOR):
+        """
+        UNFINISHED a future function to allow rays to be reflected.
+        :param direction_VECTOR: direction to point in a vector
+        :return: what it hit and distance traveled after the reflection
+        """
+        direction_Degrees = get_angle_of_vector(direction_VECTOR, degrees=True)
+        if direction_Degrees > 180 and direction_Degrees < 270: # up & left
+            direction_Degrees += 90
+        elif direction_Degrees == None: # down & right
+            pass
+        elif direction_Degrees == None: # down & left
+            pass
+        elif direction_Degrees == None: # up & right
+            pass
+        return self.single_ray_walls(self, direction_Degrees)
+
+# you can probably tell what this does
+    def Raycast_walls(self, returnval=False):
+        """
+        raycast for the walls. A raycast is whe it does a ray for the whole FOV, not just one.
+        :param bool returnval: If True, it returns a list of all the rays and their info is stored in tuples
+        :return: look at returnval
+        """
+        self.FOV = self.scan_lines
+        OG_direction = player.direction
+        draw_xray = (self.resolution // 2) - self.resolution * 2 # it shouldn't need the " - self.resolution * 2" but for some reason it just wouldnt work properly
+        rayturn = self.FOV // self.scan_lines
+        current_direction = OG_direction - self.FOV // 2 - rayturn
+        rays = []
+#        print(f"OG DIR: {str(OG_direction)}, DRAW X: {str(draw_xray)}, CURRENT DIR: {str(current_direction)}, SCAN_LINES: {str(scan_lines)}")
+        for u in range(self.scan_lines):
+            current_ray_info = raycaster.single_ray_walls(self, current_direction)
+            current_ray_dist = current_ray_info[0]
+            current_ray_colour = int(current_ray_info[-1])
+            if raycaster.texture_mapper_version == 2:
+                current_ray_colour = eval(f"raycaster.default_texture_{int(current_ray_info[2]) + 1}")
+
+            current_direction += rayturn
+            draw_xray += self.resolution
+            rays.append((current_ray_dist, OG_direction, draw_xray, current_direction, current_ray_colour))
+        if not returnval:
+            rays.sort(key=get_dist)
+            for r in rays:
+                self.draw_line(self, r)
+        else: return rays
+
+    def Raycast_sprites(self, returnval=False):
+        """
+        raycast for sprites.
+        :param returnval: if True, returns a list of all sprites hit and the info to draw them in tuples.
+        :return: look at returnval.
+        """
+        self.FOV = self.scan_lines
+        OG_direction = player.direction
+        draw_xray = (self.resolution // 2)# - self.resolution * 2 # it shouldn't need the " - self.resolution * 2" but for some reason it just wouldnt work
+        rayturn = self.FOV // self.scan_lines
+        current_direction = OG_direction - self.FOV // 2 - rayturn
+        entities = []
+        #        print(f"OG DIR: {str(OG_direction)}, DRAW X: {str(draw_xray)}, CURRENT DIR: {str(current_direction)}, SCAN_LINES: {str(scan_lines)}")
+        for u in range(self.scan_lines):
+            current_entity_info = raycaster.single_ray_entities(self, current_direction)
+            draw_xray += self.resolution
+            current_direction += rayturn
+            if current_entity_info[1] < 10000:
+                current_entity = current_entity_info[0]
+                current_ray_dist = current_entity_info[1]
+                appendix = (current_entity, OG_direction, draw_xray + self.FOV // self.scan_lines - (self.FOV * 2), current_direction, current_ray_dist)
+                entities.append(appendix)
+            else: continue
+        if not returnval:
+            entities.sort(key=get_dist, reverse=True)
+            for e in entities:
+                if not e[0].drawn:
+                    scale = ((4000 / e[-1]) - raycaster.mid_screen) // 2
+                    y = ((raycaster.mid_screen - scale) + 1000) // 2
+                    e[0].draw(scale=[int(scale), int(scale)], dist=e[4], x=draw_xray, y=y)
+                    e[0].drawn = True
+            self.t = False
+        else:
+            return entities
+
+    def sight_raycast(self):
+        """
+        A function that does an entity raycast and wall raycast and draws them accordingly
+        :return: nothing
+        """
+        sprites = self.Raycast_sprites(self=raycaster, returnval=True) # this is surprisingly fast, 0.025 seconds
+        walls = self.Raycast_walls(self=raycaster, returnval=True) # this takes 0.011 seconds
+
+        used_ids = []
+        draw_xs = {}
+        updated_sprites = []
+        for s in sprites:
+            if s[0].id not in used_ids:
+                used_ids.append(s[0].id)
+                draw_xs.update({s[0].id: [[], list(s)]})
+            # s[2] = x to be drawn on the screen
+            # acessing a dict with key s.id V
+            draw_xs[s[0].id][0].append(s[2])
+        # replace the x of the numerous rays that hit the same entity
+        for sprite, xs in draw_xs.items():
+            added_xvals = 0
+            for v in xs[0]:
+                added_xvals += v
+            avg_xvals = added_xvals // len(xs[0])
+            tttt = xs[1]
+            tttt[2] = avg_xvals# - (tttt[0].sprite.get_width() // 2)
+            updated_sprites.append(tttt)
+
+        for s in updated_sprites:
+            walls.append(s)
+        walls.sort(key=get_dist, reverse=True)
+        for t in walls:
+            try: # using a try/except block made a 3 fps improvement over if/else
+                if not t[0].drawn:
+                    scale = ((4000 / t[-1]) - raycaster.mid_screen)# // 3 #  This is WAAAAYYY too large
+                    t[0].draw(scale=[int(scale), int(scale)], dist=t[4], x=t[2], y=(win.get_height() // 2) - (scale // 2))
+            except Exception:
+                self.draw_line(self, t) # If it can't find the draw function it's an AttributeError, and that means its a line
+            except Exception as e:
+                print(f"CRAP SOMETHING WENT WRONG: {e}")#  This should never ever happen
+
+# you can probably tell what this does too
+    def draw_line(self, args): # args = og_dir, dist, draw_x, current_dir, colour(may be actual colour or )
+        dist, og_dir, draw_x, current_dir, colour = args
+        distance_travelled_by_ray = dist * math.cos(math.radians(current_dir - og_dir))
+        height_of_line = (400 / distance_travelled_by_ray) * 10 - raycaster.mid_screen
+        y = (raycaster.mid_screen - height_of_line) + 1000
+        height_of_line -= y
+        height = height_of_line * (player.height)
+        y += self.line_begin + height
+        brightness = (255 - distance_travelled_by_ray * 1.5)
+        if brightness > 255:
+            brightness = 255
+        elif brightness < 1:
+            brightness = 1
+        brightness /= 255
+        if raycaster.texture_mapper_version == 3:
+            if type(colour) == int:
+                if colour == 3:
+                    red = 0 * brightness
+                    green = 255 * brightness
+                    blue = 255 * brightness
+                elif colour == 4:
+                    red = 255 * brightness
+                    green = 50 * brightness
+                    blue = 0 * brightness
+                elif colour == 5:
+                    red = 0 * brightness
+                    green = 255 * brightness
+                    blue = 0 * brightness
+                else:
+                    red = 255 * brightness
+                    green = 255 * brightness
+                    blue = 255 * brightness
+#                                   r     g      b               x                     y                          w                       h
+                pygame.draw.rect(win, (red, green, blue), (draw_x - (self.resolution * 2), y,                       self.resolution, height_of_line // 2))
+                pygame.draw.rect(win, (blue, red, green), (draw_x - (self.resolution * 2), y + (height_of_line // 2), self.resolution, height_of_line // 2))
+                return
+            #   you can change the rgb values if you want, they'll just change the colour of the walls
+        if raycaster.texture_mapper_version == 2:
+            ttt = time.time()
+            for s in range(len(colour)):
+                cocoa_the_dynamic_list = dynamic_list(colour[s])
+                cocoa_the_dynamic_list = cocoa_the_dynamic_list.floatify(brightness)
+                pygame.draw.rect(win, cocoa_the_dynamic_list, (draw_x - (self.resolution * 2), y + (s * (height_of_line // 10)), self.resolution, height_of_line // 10))
+        if raycaster.texture_mapper_version == 1:
+            ttt = time.time()
+            y_pos = y + (height_of_line // 10)
+            line_max_enabled = True
+            #                                                                   (        size to scale to       )
+            if line_max_enabled:
+                if height_of_line > 700:
+                    height_of_line = 700
+                if y_pos < 0:
+                    y_pos = 0
+            # make image, crop, then draw
+
+            current_slice_surf = pygame.surface.Surface((raycaster.resolution, win.get_height()))
+            current_slice_surf.blit(pygame.transform.scale(raycaster.texture_png_list[colour], (self.resolution, height_of_line)).convert(),
+            (0, y_pos))
+
+            #                (x, y, width,                   height)
+            cropped_region = (0, 0, raycaster.resolution, win.get_height())
+            cropped_subsurf = current_slice_surf.subsurface(cropped_region)
+            win.blit(cropped_subsurf.convert(), (draw_x - (self.resolution * 2), 0))
+
+            #win.blit(pygame.transform.scale(raycaster.texture_png_list[colour], (self.resolution, height_of_line)).convert(),
+            #                               (draw_x - (self.resolution * 2), y))
+            if time.time() - ttt > 0.003:
+                print(height_of_line)
+
+
+def get_dist(r):
+    if type(r[0]) != int:
+        return r[4]
+    else:
+        return r[0]
+
+
+def get_id(e):
+    return e.id
+
+
+# redrawgamewindow -------------------------------------------------------------------------#
+test_mode = True
+def redrawgamewindow():
+    win.fill((100, 100, 100))
+    #ttt2 = time.time()
+    raycaster.sight_raycast(raycaster) # something in the sight_raycast function is slowing things down
+    #print(f"raycast took {time.time() - ttt2} seconds")
+    if test_mode:
+        plx = (round(float((player.x) // 100))) * constant
+        ply = (round(float((player.y) // 100))) * constant
+        draw_squares()
+        pygame.draw.rect(win, (0, 255, 0), (plx, ply, constant, constant))
+    #                (x, y, width, height)
+    cropped_region = (0, 0, 1300, 700)
+    cropped_subsurf = win.subsurface(cropped_region)
+    window.blit(cropped_subsurf, (0, 0))
+    #pygame.draw.rect(win, (255, 255, 255), (win.get_width() / 2 - 5, win.get_height() / 2 - 5, 10, 10))
+    #window.blit(win.convert(), (0, 0))
+
+    pygame.display.update()
+
+
+# mainloop -----------------------------------------------------------------------------------------#
+set_walls()
+base_font = pygame.font.Font(None, 100)
+input_string = ""
+user_input = []
+background = pygame.image.load("D:/python/3D game map editor/Mainmenu raycaster.png")
+menuel = True
+run = True
+draw_squares()
+turnee = 5
+test_cooldown = 0
+clock = pygame.time.Clock()
+prev_mouse_movement = pygame.mouse.get_rel()
+pygame.event.set_grab(True)
+while run:
+    clock.tick(30)
+    fps = clock.get_fps()
+    pygame.display.set_caption(str(fps))
+
+    redrawgamewindow()
+    pygame.event.set_grab(True)
+
+    # menu ---------------------------------------------------------------------------------------------#
+    text_selected = False
+    text_hitbox = (25, 300, 1275, 500)
+    while menuel:
+        pygame.mouse.set_visible(True)
+        m_up_left = False
+        m_down_right = False
+        colour_of_textbox = (155, 155, 155)
+        if text_selected:
+            colour_of_textbox = (255, 255, 255)
+        window.blit(background, (0, 0))
+        pygame.draw.rect(window, colour_of_textbox, (25, 300, 1250, 200))
+
+        input_string = ''.join(user_input)
+        text = base_font.render(input_string, True, (0, 0, 0))
+
+        window.blit(text, (text_hitbox[0], text_hitbox[1]))
+        pygame.display.update()
+
+        keys = pygame.key.get_pressed()
+        pygame.event.set_grab(False)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                run = False
+                menuel = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = pygame.mouse.get_pos()
+                mouse_x = mouse_pos[0]
+                mouse_y = mouse_pos[1]
+                mouse_xy = (mouse_x, mouse_y)
+                if mouse_x >= text_hitbox[0] and mouse_y >= text_hitbox[1]:
+                    m_down_right = True
+                if mouse_x <= text_hitbox[2] and mouse_y <= text_hitbox[3]:
+                    m_up_left = True
+                m_inside_text = bool(m_down_right and m_up_left)
+                if m_inside_text and not text_selected:
+                    text_selected = True
+                elif text_selected and not m_inside_text:
+                    text_selected = False
+
+            if text_selected:
+                if event.type == pygame.KEYDOWN:
+                    user_input.append(event.unicode)
+                    try:
+                        if user_input[-1] == '\x08':
+                            user_input.pop(-1)
+                            user_input.pop(-1)
+                        if user_input[-1] == '\r':
+                            user_input.pop(-1)
+                        if user_input[-1] == '\x1b':
+                            user_input.pop(-1)
+                            text_selected = False
+                    except:
+                        if user_input == '\x08':
+                            user_input = []
+                        if user_input == '\r':
+                            user_input = []
+                        if user_input == '\x1b':
+                            user_input = []
+                            text_selected = False
+        #menu loop over -------------------------------------------------------------------------------------#
+
+        if keys[pygame.K_RETURN]:
+            menuel = False
+            path_to_level = input_string # loading the level
+            try:
+                with open(path_to_level, "r") as level_file:
+                    file_contents = level_file.read()
+                    level = eval(file_contents)
+            except Exception as e:
+                print(e)
+            player.set_spawn(player)
+            pygame.mouse.set_visible(False)
+            cooldown = 20
+        # menu processes ends --------------------------------------------------------------------#
+
+    for s in Sprite.sprites:
+        s.update_position()
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            run = False
+
+    #input ------------------------------------------------------------------------------------------#
+    keys = pygame.key.get_pressed()
+    mouse_movement = pygame.mouse.get_rel()
+    mouse_x_movement = mouse_movement[0]
+    if mouse_movement[0] > 0:
+        mouse_x_movement *= -1
+        mouse_x_movement //= 10
+        mouse_x_movement *= -1
+    else: mouse_x_movement //= 10
+    mouse_x_movement -= mouse_x_movement * 0.3
+    player.direction += mouse_x_movement
+    # for vertical mouse movement
+    if player.invert_vertical:
+        raycaster.line_begin += mouse_movement[1] // 2
+    else:
+        raycaster.line_begin -= mouse_movement[1] // 2
+    pygame.mouse.set_pos(winwidth // 2, winheight // 2)
+
+    if keys[pygame.K_ESCAPE]:
+        menuel = True
+    #movement -------------------------------------------
+    if keys[pygame.K_w]:
+        player.x
+        player.move_forward(player)
+    if keys[pygame.K_a]:
+        player.move_left(player)
+    if keys[pygame.K_s]:
+        player.move_backward(player)
+    if keys[pygame.K_d]:
+        player.move_right(player)
+    if keys[pygame.K_e]:
+        pass
+        #raycaster.ray_box_print(self=raycaster, direction=player.direction)
+    if keys[pygame.K_LEFT]:
+        player.direction -= 5
+        if player.direction <= -1:
+            player.direction = 360
+    if keys[pygame.K_RIGHT]:
+        player.direction += 5
+        if player.direction >= 360:
+            player.direction = 0
+    if keys[pygame.K_UP]:
+        pass
+#        s.scale[0] += 10
+#        s.scale[1] += 10
+    if keys[pygame.K_DOWN]:
+        print(clock.get_fps())
+        s.scale[0] -= 10
+        s.scale[1] -= 10
+    if keys[pygame.K_q]:
+        player.invert_vertical = not player.invert_vertical
+    if keys[pygame.K_f] and not bool(test_cooldown):
+        test_mode = not test_mode
+        test_cooldown = 10
+    if bool(test_cooldown):
+        test_cooldown -= 1
+    # jumping
+    if keys[pygame.K_SPACE] and not player.jumping:
+        player.jumpcount = 0.08
+        player.jumping = True
+    if player.jumpcount > -0.08 and player.jumping:
+        player.height += player.jumpcount
+        player.jumpcount -= 0.01
+    else: player.jumping = False; player.height = 0.1
+    # for mouse movement (again)
+    prev_mouse_movement = pygame.mouse.get_rel()
+
+# if you want to see these values, add a time.sleep(x) after the print(), x = seconds to view the values for
+print(f"FOV: {str(raycaster.FOV)}, What this program thinks is the middle of the screen: {str(raycaster.mid_screen)}, size of squares: {constant}, t: {raycaster.t}")
+pygame.quit()
+exit()
+
+# To fix the fps issues: Idk
